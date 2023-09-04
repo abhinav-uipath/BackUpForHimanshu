@@ -1,0 +1,206 @@
+<aura:component implements="force:appHostable,flexipage:availableForAllPageTypes,flexipage:availableForRecordHome,force:hasRecordId,forceCommunity:availableForAllPageTypes,force:lightningQuickActionWithoutHeader,lightning:actionOverride" access="global"
+    controller="EI_EWI_EditComplaint">  
+    
+    
+    
+    <!-- Displays a toast notification -->  
+    <aura:attribute name="compList" type="Object"/>
+    <aura:attribute name="userList" type="list" default=""/>    
+    <aura:attribute name="recordId" type="Id"/>
+    <aura:attribute name ="dateComplaint" type="Date"/>
+    <aura:attribute name="NameId" type="String" />
+     <aura:attribute name="conSelect" type="String"/>
+    <aura:attribute name="getUser" type="String"/> 
+    
+    <aura:attribute name="user"
+                    type="Complaint__c"
+                    default="{'sobjectType':'Complaint__c'}"/>
+    <aura:handler name="init" value="{!this}" action="{!c.doInit}"/>
+    
+    
+    <lightning:input label="Case Number" value="{!v.compList.accRecord.Case__r.CaseNumber}" aura:id="accSelect" disabled="true"/>
+       
+    <div class="slds-form-element slds has error">
+        
+        <lightning:input type="date" name="input1" label="Date complaint received" value="{!v.dateComplaint}" aura:id="search-name" />    
+    </div>
+   
+    <lightning:select name="to" label="Complaint raised by" value="{!v.conSelect}" aura:id="conSel"  onchange="{!c.handleConChange}">
+        
+        <aura:iteration items="{!v.compList.ParticipantList}" var="to">       
+            
+            <option value="{!to.Id}" selected="{!to.Id == v.conSelect}">{!to.Participant_name__c} </option>
+            
+        </aura:iteration>
+        
+    </lightning:select>
+    
+    <lightning:select name="to" label="Assign case to" value="{!v.getUser}"  aura:id="userSelect" >
+        
+        <aura:iteration items="{!v.userList}" var="to">       
+            
+           <option value="{!to.AssigneeId}">{!to.Assignee.Name} </option>
+            
+        </aura:iteration>
+        
+    </lightning:select> 
+    
+   <!-- <div>
+        "{!v.user.Assign_case_to__c}"
+      Assign case to<lightning:input value="{!v.user.Assign_case_to__c}" aura:id="userSelect"/>
+    </div> --> 
+    <br/>
+         
+    <div class="slds-align_absolute-center" style="height:2rem">
+        <lightning:button variant="brand"
+                          label="Save"
+                          title="Brand action"  
+                          onclick="{!c.handlerUpdate}"  /> 
+        
+        <button type="button" class="slds-button slds-button_neutral" onclick="{!c.cancelBtn}" >Cancel</button>
+                           
+    </div>
+    
+</aura:component>
+
+=============================================================================================
+
+
+({
+    doInit : function(component, event, helper) {
+        //alert('Hi');
+        
+        var action = component.get("c.getComplaintRecord");       
+        action.setParams({complaintId: component.get("v.recordId")});
+        
+        action.setCallback(this,function(response){
+            var State = response.getState();
+            if(State==='SUCCESS'){
+                var result=response.getReturnValue();  
+                console.log('Success new=>'+JSON.stringify(result));
+                component.set("v.compList", result);
+                console.log('compList => ');
+                component.set("v.dateComplaint", result.accRecord.Date_complaint_received__c);  
+                console.log('dateComplaint => ');
+                component.set("v.userList", result.uList); 
+                console.log('userList => ');
+                component.set("v.getUser", result.uList[0].AssigneeId);
+                console.log('Line20 => '+result.uList[0].AssigneeId);
+                //component.find("conSel").set("v.value",result.contactList[0].id);
+                
+                for(let i=0; i< result.ParticipantList.length; i++){
+                    console.log('result.ParticipantList['+i+']' + result.ParticipantList[i].Id);
+                    if(result.ParticipantList[i].Id == result.accRecord.Complaint_raised_by__c){
+                        component.set("v.conSelect", result.ParticipantList[i].Id);
+                    }
+                }
+                
+                component.set("v.getUser", result.uList[0].AssigneeId);
+                console.log('conSelected => ' + component.get("v.conSelect"));
+            }     
+            else{
+                console.log('Failed');
+            }
+        });      
+        
+        $A.enqueueAction(action);     
+        
+    },
+     
+    handlerUpdate:function(component,event,helper){
+        // alert('Hello');
+        
+        var CaseId = component.get("v.recordId");         
+        var caseNumber = component.find("accSelect").get("v.value");      
+        var dateCmp = component.get("v.dateComplaint");
+		console.log("Line no 37"+dateCmp);        
+        //var conName = component.find("conSel").get("v.value");
+         var conName = component.get("v.conSelect"); 
+         console.log('Line no 49-->>'+conName);      
+       // var userName = component.find("userSelect").get("v.value");
+      var userName = component.get("v.getUser");
+        console.log('Line no 52-->>'+userName); 
+       
+      if((dateCmp == "" || dateCmp == null  || dateCmp == undefined)||
+          (conName == "" || conName == null  || conName == undefined)||
+          (userName == "" || userName == null  || userName == undefined)){
+         
+           var toastEvent = $A.get("e.force:showToast");
+                            toastEvent.setParams({
+                                title : 'Error',
+                                message:'You must complete all fields in order to save the record.',
+                                duration:'5000',
+                                key: 'info_alt',
+                                type: 'error',
+                                mode: 'pester'
+                            });
+                           toastEvent.fire();
+   }
+        else{
+            
+        var action = component.get("c.editComplaint");       
+        action.setParams({"accName":CaseId,"cNumber":caseNumber,"dateCmp":dateCmp,"conName":conName,"userName":userName});
+            console.log("LineNo 73-->>");
+        action.setCallback(this,function(response){
+            var State = response.getState();
+            if(State==='SUCCESS'){
+                var result=response.getReturnValue();  
+                console.log('Success new='+JSON.stringify(result));
+                if(result == 'Case not closed'){             
+                    var toastEvent = $A.get("e.force:showToast");
+                    toastEvent.setParams({
+                        title : 'Error',
+                        message:'Something went Wrong!!',
+                        duration:'5000',
+                        key: 'info_alt',
+                        type: 'error',
+                        mode: 'pester'
+                    });
+                    toastEvent.fire();
+                    $A.get('e.force:refreshView').fire();
+                    
+                    
+                }else{
+                    //component.set("v.showPopUp", false);
+                    var toastEvent = $A.get("e.force:showToast");
+                    toastEvent.setParams({
+                        title : 'Success!',
+                        message:'The record has been updated successfully.',
+                        duration:'5000',
+                        key: 'info_alt',
+                        type: 'success',
+                        mode: 'pester'
+                    });
+                    toastEvent.fire();
+                    $A.get('e.force:refreshView').fire();
+                }
+                
+            }
+            else{
+                console.log('LineNo 109-->>Failed');
+            }
+        });      
+        
+        $A.enqueueAction(action);     
+        
+            
+        }
+        
+       
+    },
+    
+    
+    handleConChange : function(component, event, helper){
+         var conName = component.find("conSel").get("v.value");        
+         component.set("v.conSelect", conName);
+        
+        var userName = component.find("userSelect").get("v.value");        
+         component.set("v.getUser", userName);
+        
+    },
+    
+     cancelBtn: function(component, event, helper){   
+        $A.get("e.force:closeQuickAction").fire();
+    }
+         
+})
