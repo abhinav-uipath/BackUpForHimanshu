@@ -1,0 +1,1 @@
+select id,type__c,Case__r.Agent_Name__c, Primary_Agent__c,Case__r.Branch_Notes__c, Case__r.Member_Notes__c,Bank_Account_Number__c from Case_Participant__c where recordtype.name='EWI Case Participant' and Type__c='Agent' and Primary_Agent__c = true and Bank_Account_Number__c = null
