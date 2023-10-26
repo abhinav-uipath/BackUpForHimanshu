@@ -1,0 +1,70 @@
+trigger EI_InstallmentTrigger on Installment__c (before insert,before update,before delete,after insert, after update, after delete,after undelete) {
+    system.debug('Trigger called');    
+  // if(!EI_checkRecursive.firstcall) {
+     //  if(trigger.isafter){
+           //EI_checkRecursive.firstcall = true;
+     //   }
+        Trigger_Execute__c setting = Trigger_Execute__c.getValues('EI_InstallmentTrigger'); 
+    if((setting != null && setting.Active__c) || Test.isRunningTest()) {
+        if((Trigger.isInsert || Trigger.isUpdate) && Trigger.isBefore){
+            EI_InstallmentTriggerHandler.updateBankDetails(Trigger.new);
+            
+        }
+    }
+    
+  //  Trigger_Execute__c setting = Trigger_Execute__c.getValues('EI_InstallmentTrigger'); 
+    if((setting != null && setting.Active__c) || Test.isRunningTest()) {
+        if((Trigger.isInsert || Trigger.isUpdate) && Trigger.isAfter){
+            EI_InstallmentTriggerHandler.createChequePayments(Trigger.oldMap,Trigger.new);
+            
+        }
+    }
+    
+    //--------------------//Shirin on 29Sept to calculate aggregate of Instalments on Case--------------------
+    system.debug('triger executed');
+    if(Trigger.isInsert && Trigger.isAfter){
+        
+        Id InstalmentRecordTypeId = Schema.SObjectType.Installment__c.getRecordTypeInfosByName().get('EWI Installment').getRecordTypeId();
+        system.debug('triger executed2nd' + InstalmentRecordTypeId);
+        //for(Installment__c objIns :Trigger.new){
+           // if(objIns.RecordtYpeId==InstalmentRecordTypeId){
+                
+                EI_InstallmentTriggerHandler.aggregateCasefromInstallment(null,Trigger.new,null,true,false,false,false);
+            //}
+        //}
+    }
+    if(Trigger.isUpdate && Trigger.isAfter){
+        system.debug( 'aaya');
+        Id InstalmentRecordTypeId = Schema.SObjectType.Installment__c.getRecordTypeInfosByName().get('EWI Installment').getRecordTypeId();
+        system.debug('triger executed2nd' + InstalmentRecordTypeId);
+        //for(Installment__c objIns :Trigger.new){
+            //system.debug('RecordtYpeId' + objIns.RecordtYpeId);
+            //if(objIns.RecordtYpeId==InstalmentRecordTypeId){
+                
+                EI_InstallmentTriggerHandler.aggregateCasefromInstallment(Trigger.oldMap,Trigger.new,null,false,false,false,true);
+            //}
+        //}
+    }
+    if(Trigger.isDelete  && Trigger.isAfter){
+        Id InstalmentRecordTypeId = Schema.SObjectType.Installment__c.getRecordTypeInfosByName().get('EWI Installment').getRecordTypeId();
+        //for(Installment__c objIns :Trigger.old){
+            //if(objIns.RecordtYpeId==InstalmentRecordTypeId){
+                
+                EI_InstallmentTriggerHandler.aggregateCasefromInstallment(null,null,Trigger.Old,false,false,true,false);
+            //}
+       // }
+    }
+    if(Trigger.isUndelete  && Trigger.isAfter){
+        Id InstalmentRecordTypeId = Schema.SObjectType.Installment__c.getRecordTypeInfosByName().get('EWI Installment').getRecordTypeId();
+       // for(Installment__c objIns :Trigger.new){
+            
+           // if(objIns.RecordtYpeId==InstalmentRecordTypeId){
+                
+                EI_InstallmentTriggerHandler.aggregateCasefromInstallment(null,Trigger.new,null,false,true,false,false);
+           // }
+        //}
+    }
+    //--------------------------------------------------------------------------------------
+    
+     //  }    
+}
