@@ -1,0 +1,55 @@
+trigger Case_Participants_Trigger on Case_Participant__c (before insert, after insert, after update, after delete,before update) {
+   
+    if(trigger.isBefore){
+        if(trigger.isInsert){
+            Case_Participants_TriggerHandler.onBeforeInsert(trigger.new);
+        }
+    }
+   
+    if(trigger.isafter){
+        If(trigger.isinsert || trigger.isupdate){
+            // Case_Participants_TriggerHandler.updateLeadTenantName(Trigger.New);
+            // Case_Participants_TriggerHandler.updateTenantsNamesOnCase(Trigger.New);
+            Case_Participants_TriggerHandler.afterEventHandler(Trigger.New, Trigger.oldMap);
+        }
+        If(trigger.isDelete){
+            // Case_Participants_TriggerHandler.updateTenantsNamesOnCase(Trigger.Old);
+            Case_Participants_TriggerHandler.afterEventHandler(Trigger.old, Trigger.oldMap);
+        }
+        
+    }
+    
+    //Added by Shirrin
+    if(trigger.isAfter && Trigger.isUpdate){
+    Id CPRecordTypeId =Schema.SObjectType.Case_Participant__c.getRecordTypeInfosByDeveloperName().get('EWI_Case_Participant').getRecordTypeId();
+        for(Case_Participant__c cp: Trigger.new){
+             if(cp.RecordTypeId==CPRecordTypeId ){
+                Case_Participants_TriggerHandler.sendEmailCasePartInvalidBankDetails(Trigger.New,Trigger.oldMap);
+                 Case_Participants_TriggerHandler.updateInstallmentBankDetails(Trigger.New);
+                }
+            }
+         }
+    
+        //Added by Shirrin
+    if(trigger.isbefore && Trigger.isUpdate){
+    Id CPRecordTypeId =Schema.SObjectType.Case_Participant__c.getRecordTypeInfosByDeveloperName().get('EWI_Case_Participant').getRecordTypeId();
+        for(Case_Participant__c cp: Trigger.new){
+             if(cp.RecordTypeId==CPRecordTypeId ){
+               Case_Participants_TriggerHandler.validatebankdetailsifpaymentproceeded(Trigger.New,Trigger.oldMap);
+               //Case_Participants_TriggerHandler.validatebankdetailsifpaymentReturnMethod(Trigger.New,trigger.oldMap);  
+                }
+            }
+         }
+    
+    //Added by Shirrin
+   /*  if(trigger.isAfter && Trigger.isInsert){
+    Id CPRecordTypeId =Schema.SObjectType.Case_Participant__c.getRecordTypeInfosByDeveloperName().get('EWI_Case_Participant').getRecordTypeId();
+        for(Case_Participant__c cp: Trigger.new){
+             if(cp.RecordTypeId==CPRecordTypeId ){
+               //Case_Participants_TriggerHandler.updateInstallmentBankDetails(Trigger.New);
+                }
+            }
+         }
+       */
+    
+}
