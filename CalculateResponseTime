@@ -1,0 +1,248 @@
+public class CalculateResponseTime {
+    
+    @InvocableMethod
+    public static void calculateTimeTaken(List<Id> emailMessageIds) {
+        
+        Map<Id, Holiday> holidayMap = new Map<Id, Holiday>([SELECT Id, StartTimeInMinutes,ActivityDate, Name, Description 
+                                                            FROM Holiday 
+                                                            ORDER BY ActivityDate, Id]);
+        
+        list<BusinessHours> businessHoursList = new list<BusinessHours>([SELECT Id, Name, IsActive 
+                                                           FROM BusinessHours 
+                                                           WHERE ( IsActive = TRUE)]);
+        
+        map<String,BusinessHours> businessHoursMap = new map<String,BusinessHours>();
+        
+        for(BusinessHours BH : businessHoursList){
+            businessHoursMap.put(BH.Name,BH);
+        }
+        
+        Map<String, Email_to_case__mdt> labelVSmetadata = new Map<String, Email_to_case__mdt>();
+        List<Email_to_case__mdt> emailToCaseList = [SELECT Label, BH_Name__c, BH_start_time_hours__c, BH_end_time_hours__c FROM Email_to_case__mdt];
+
+        for (Email_to_case__mdt mdt : emailToCaseList) {
+            labelVSmetadata.put(mdt.Label, mdt);
+        }
+
+        List<EmailMessage> emailMessages = [
+            SELECT Id, CreatedDate, Email_Responded_To_On__c,
+                Time_Taken_To_Respond__c, Time_Taken__c,
+                Parent.RecordType.Name,Bypass_KPI__c
+            FROM EmailMessage
+            WHERE Id IN :emailMessageIds
+            AND Time_Taken_To_Respond__c = null
+            AND Bypass_KPI__c = False
+        ];
+        
+
+        Map<Id, EmailMessage> emailMessageMap = new Map<Id, EmailMessage>(emailMessages);
+
+        List<EmailMessage> emailMessagesToUpdate = new List<EmailMessage>();
+
+        for (Id messageId : emailMessageIds) {
+            EmailMessage emailMessage = emailMessageMap.get(messageId);
+
+            if (emailMessage != null) {
+                DateTime createdDate = emailMessage.CreatedDate;
+                DateTime respondedToDate = emailMessage.Email_Responded_To_On__c;
+                String recordTypeName = emailMessage.Parent.RecordType.Name;
+                
+                if (createdDate != null && respondedToDate != null && labelVSmetadata.containsKey(recordTypeName)) {
+                    
+                    Email_to_case__mdt mdt = labelVSmetadata.get(recordTypeName);
+                    String businessHoursName = mdt.BH_Name__c;
+                	Decimal businessHoursStartTime = mdt.BH_start_time_hours__c;
+                	Decimal businessHoursEndTime = mdt.BH_end_time_hours__c;
+                    Decimal minutes=60;
+                    
+                    Decimal workingHoursPerDay = businessHoursEndTime - businessHoursStartTime;
+                    system.debug('workingHoursPerDay  '+workingHoursPerDay);
+                    
+    				Decimal workingMinutesPerDay = workingHoursPerDay * minutes;
+                    
+                    system.debug('workingMinutesPerDay  '+workingMinutesPerDay);
+                    
+                    system.debug('businessHoursName.  '+businessHoursName);
+                    system.debug('businessHoursStartTime '+businessHoursStartTime);
+                    system.debug('businessHoursEndTime '+ businessHoursEndTime);
+                    
+                    Date fromDay = createdDate.date();
+        			Date toDay = respondedToDate.date();
+
+			        Integer allDaysBetween = (Integer) ((fromDay.daysBetween(toDay)) + 1);
+                    system.debug('allDaysBetween '+ allDaysBetween);
+        			Decimal allWorkingMinutes = 0;
+        			for (Integer i = 0; i < allDaysBetween; i++) {
+                        
+                        Date currentDay = fromDay.addDays(i);
+    					System.debug('Checking day ' + currentDay + ' isWorkingDay: ' + isWorkingDay(currentDay,holidayMap, businessHoursMap.get(businessHoursName)));
+                        
+            			if (isWorkingDay(fromDay.addDays(i),holidayMap, businessHoursMap.get(businessHoursName))) {
+                			allWorkingMinutes += workingMinutesPerDay;
+                            system.debug('allWorkingMinutes '+ allWorkingMinutes);
+            			}
+        			}
+                    
+                    // from - working_day_from_start
+        			Decimal tailRedundantMinutes = 0;
+        			if (isWorkingDay(createdDate.date(),holidayMap, businessHoursMap.get(businessHoursName))) {
+            			if (isWorkingHours(createdDate,businessHoursStartTime,businessHoursEndTime)) {
+                			tailRedundantMinutes = (createdDate.hour() - businessHoursStartTime) * minutes + createdDate.minute();
+            			} else if (createdDate.hour() > businessHoursStartTime) {
+                			tailRedundantMinutes = workingMinutesPerDay;
+            			}
+        			}
+                    
+                    
+                    // working_day_end - to
+        			Decimal headRedundantMinutes = 0;
+        			if (isWorkingDay(respondedToDate.date(),holidayMap, businessHoursMap.get(businessHoursName))) {              
+            			if (isWorkingHours(respondedToDate,businessHoursStartTime,businessHoursEndTime)) {
+                			headRedundantMinutes = (businessHoursEndTime - respondedToDate.hour()) * minutes - respondedToDate.minute();
+            			} else if (respondedToDate.hour() < businessHoursEndTime) {
+                			headRedundantMinutes = workingMinutesPerDay;
+            			}
+        			}
+                    
+                    
+                    //kpi start date
+                    DateTime kpiStartDate;
+                    integer hour= businessHoursStartTime.intValue();
+                    integer minute = (Integer)((businessHoursStartTime-hour)*60);
+                    
+        			if (isWorkingDay(createdDate.date(),holidayMap, businessHoursMap.get(businessHoursName))) {
+            			if (isWorkingHours(createdDate,businessHoursStartTime,businessHoursEndTime)) {
+                			kpiStartDate = createdDate;
+            			}else if (createdDate.hour() < businessHoursStartTime) {
+                			kpiStartDate = datetime.newInstance(createdDate.date(),time.newInstance(hour,minute,0,0));
+            			}
+        			}
+                    else{
+                        
+                        Date todayKpi = createdDate.date();
+                        for (Integer i = 0; i < allDaysBetween; i++) {
+                            if (isWorkingDay(todayKpi.addDays(i),holidayMap, businessHoursMap.get(businessHoursName))) {
+                                kpiStartDate= datetime.newInstance(todayKpi.addDays(i),time.newInstance(hour,minute,0,0));
+                                break;
+                            }
+                        }
+                        
+                    }
+                    
+                    
+                    //kpi end date
+                    
+                    DateTime kpiEndDate;
+                    integer endHour= businessHoursEndTime.intValue();
+                    integer endMinute = (Integer)((businessHoursEndTime-endHour)*60);
+                    
+        			if (isWorkingDay(respondedToDate.date(),holidayMap, businessHoursMap.get(businessHoursName))) {              
+            			if (isWorkingHours(respondedToDate,businessHoursStartTime,businessHoursEndTime)) {
+                			kpiEndDate = respondedToDate;
+            			} else if (respondedToDate.hour() > businessHoursEndTime) {
+                			kpiEndDate = datetime.newInstance(respondedToDate.date(),time.newInstance(endHour,endMinute,0,0));
+            			}
+        			}
+                    else{
+                        
+                        Date todayKpiEnd = respondedToDate.date();
+                        for (Integer i = 0; i < allDaysBetween; i++) {
+                            if (isWorkingDay(todayKpiEnd.addDays(-i),holidayMap, businessHoursMap.get(businessHoursName))) {
+                                kpiEndDate= datetime.newInstance(todayKpiEnd.addDays(-i),time.newInstance(endHour,endMinute,0,0));
+                                break;
+                            }
+                        }
+                        
+                    }
+                    
+                    
+                    
+                    Integer timeTaken=(Integer) (allWorkingMinutes - tailRedundantMinutes - headRedundantMinutes).intValue();
+                    system.debug(timeTaken);
+                    emailMessage.KPI_End_Date__c = kpiEndDate;
+                    emailMessage.KPI_Start_Date__c = kpiStartDate;
+                    system.debug('>>>>>>>>>>>>>>>> start date'+emailMessage.KPI_Start_Date__c);
+                    system.debug('>>>>>>>>>>>>>>>> end date'+emailMessage.KPI_End_Date__c);
+                    emailMessage.Time_Taken_To_Respond__c = timeTaken;
+                    emailMessage.Time_Taken__c = convertMinutesToDHM(timeTaken);
+                    system.debug(emailMessage.Time_Taken__c);
+                    system.debug(emailMessage.Time_Taken_To_Respond__c);
+                    emailMessagesToUpdate.add(emailMessage);
+                    
+                
+                }
+            }
+        }
+        
+        if(!emailMessagesToUpdate.isEmpty()){
+            update emailMessagesToUpdate;
+        }
+        
+    }
+    
+    private static Boolean isWorkingDay(Date givenDate,Map<Id, Holiday> holidayMap, BusinessHours BH) {
+        
+        list<Holiday> holidays = listOfHolidayCountryWise(holidayMap, BH);
+        for(Holiday hDay:holidays) {
+            if(givenDate.daysBetween(hDay.ActivityDate) == 0) {
+                return false;
+            }
+        }
+        
+        Date weekStart=givenDate.toStartofWeek();
+        return  weekStart.daysBetween(givenDate) != 6 && weekStart.daysBetween(givenDate) != 5;
+    }
+
+    private static Boolean isWorkingHours(DateTime givenTime,Decimal bhStart, Decimal bhEnd) {
+        Decimal hour = givenTime.hour() + Decimal.valueOf(givenTime.minute())/Decimal.valueOf(60);
+        system.debug('hour 141  '+hour);
+        return bhStart <= hour && hour <= bhEnd;
+    }
+    
+    private static List<Holiday> listOfHolidayCountryWise(Map<Id, Holiday> holidayMap, BusinessHours BH){
+        
+        list<Holiday> listOfHolidays = new list<Holiday>();
+        if(BH != null && !holidayMap.isEmpty() && holidayMap.size() > 0) {
+            
+                for(Holiday holidayVar : holidayMap.values()){
+                    if(!BusinessHours.isWithin(BH.Id, holidayVar.ActivityDate)) {
+                        listOfHolidays.add(holidayVar);
+                    }
+                }
+           
+        }
+        if(!listOfHolidays.isEmpty() && listOfHolidays.size() > 0) {
+            return listOfHolidays;
+        }
+        return null;
+    }
+    
+    public static String convertMinutesToDHM(Integer minutes) {
+        Integer totalMinutes = minutes;
+        Integer days = totalMinutes / (24 * 60);
+        totalMinutes = totalMinutes - (days * 24 * 60);
+        Integer hours = totalMinutes / 60;
+        Integer finalMinutes = totalMinutes - (hours * 60);
+
+        String timeTaken = '';
+
+        if (days > 0) {
+            timeTaken += days + (days > 1 ? ' days ' : ' day ');
+        }
+        if (hours > 0) {
+            if (timeTaken != '') {
+                timeTaken += ' ';
+            }
+            timeTaken += hours + (hours > 1 ? ' hours ' : ' hour ');
+        }
+        if (finalMinutes > 0) {
+            if (timeTaken != '') {
+                timeTaken += ' ';
+            }
+            timeTaken += finalMinutes + (finalMinutes > 1 ? ' minutes' : ' minute');
+        }
+
+        return timeTaken.trim();
+    }
+    
+}
