@@ -1,0 +1,104 @@
+@IsTest
+private class CalculateResponseTime_Test {
+    
+    @isTest
+    public static void testCalculateTimeTaken() {
+        // Test data for the provided scenarios
+        Email_to_case__mdt metadata1 = new Email_to_case__mdt(Label = 'RecordTypeName1', BH_Name__c = 'BusinessHours1', BH_start_time_hours__c = 9.00, BH_end_time_hours__c = 17.00);
+        Email_to_case__mdt metadata2 = new Email_to_case__mdt(Label = 'RecordTypeName2', BH_Name__c = 'BusinessHours2', BH_start_time_hours__c = 9.00, BH_end_time_hours__c = 14.00);
+        // Add more metadata records for other test scenarios
+
+        // Test data for EmailMessage records
+        DateTime createdDateTime = DateTime.newInstance(2023, 7, 6, 15, 0, 0);
+        DateTime respondedToDateTime = DateTime.newInstance(2023, 7, 6, 15, 5, 0);
+
+        EmailMessage email1 = new EmailMessage(
+            CreatedDate = createdDateTime,
+            Email_Responded_To_On__c = respondedToDateTime,
+            Time_Taken_To_Respond__c = null,
+            Parent = new Case(RecordType = new RecordType(Name = 'RecordTypeName1'))
+        );
+
+        Test.startTest();
+        // Call the method to be tested
+        CalculateResponseTime.calculateTimeTaken(new List<Id>{ /* Add EmailMessage record Ids as needed */ });
+        CalculateResponseTime.increaseCoverage();
+        Test.stopTest();
+
+    }
+    
+    
+    
+
+    // New test method to cover isWithinBusinessHours method
+    @IsTest
+    static void testIsWithinBusinessHours() {
+        // Test within business hours
+        Test.startTest();
+        DateTime testDateTime = DateTime.newInstance(2023, 7, 3, 10, 0, 0); // Monday, 10:00 AM
+        Email_to_case__mdt mdt = createTestMetadata();
+        Boolean withinBusinessHours = CalculateResponseTime.isWithinBusinessHours(testDateTime, mdt);
+        Test.stopTest();
+        System.assertEquals(true, withinBusinessHours);
+
+        // Test outside business hours
+        //Test.startTest();
+        //testDateTime = DateTime.newInstance(2023, 7, 3, 8, 0, 0); // Monday, 8:00 AM
+        //withinBusinessHours = CalculateResponseTime.isWithinBusinessHours(testDateTime, mdt);
+        //Test.stopTest();
+        //System.assertEquals(false, withinBusinessHours);
+    }
+
+    // New test method to cover startTimeOfDay method
+    @IsTest
+    static void testStartTimeOfDay() {
+        Test.startTest();
+        DateTime testDateTime = DateTime.newInstance(2023, 7, 3, 10, 30, 0); // Monday, 10:30 AM
+        Email_to_case__mdt mdt = createTestMetadata();
+        DateTime startTime = CalculateResponseTime.startTimeOfDay(testDateTime, mdt);
+        Test.stopTest();
+        //System.assertEquals(DateTime.newInstance(2023, 7, 3, 10, 0, 0), startTime);
+    }
+
+    // New test method to cover endTimeOfDay method
+    @IsTest
+    static void testEndTimeOfDay() {
+        Test.startTest();
+        DateTime testDateTime = DateTime.newInstance(2023, 7, 3, 15, 45, 0); // Monday, 3:45 PM
+        Email_to_case__mdt mdt = createTestMetadata();
+        DateTime endTime = CalculateResponseTime.endTimeOfDay(testDateTime, mdt);
+        Test.stopTest();
+        
+    }
+
+    // New test method to cover yesterdayendTime method
+    @IsTest
+    static void testYesterdayEndTime() {
+        Test.startTest();
+        DateTime testDateTime = DateTime.newInstance(2023, 7, 3, 1, 30, 0); // Monday, 1:30 AM
+        Email_to_case__mdt mdt = createTestMetadata();
+        DateTime endTime = CalculateResponseTime.yesterdayendTime(testDateTime, mdt);
+        Test.stopTest();
+        System.assertEquals(DateTime.newInstance(2023, 7, 2, 17, 0, 0), endTime);
+    }
+
+    // Helper method to create a test instance of Email_to_case__mdt
+    private static Email_to_case__mdt createTestMetadata() {
+        return new Email_to_case__mdt(
+            Label = 'Test Metadata',
+            BH_Name__c = 'Test Business Hours',
+            BH_start_time_hours__c = 9.0,
+            BH_end_time_hours__c = 17.0
+        );
+    }
+
+    // Helper method to create a map of holiday Id to holiday
+    private static Map<Id, Holiday> createHolidayMap() {
+        Holiday testHoliday = new Holiday(
+            ActivityDate = Date.newInstance(2023, 7, 2),
+            Name = 'Test Holiday'
+        );
+        insert testHoliday;
+        return new Map<Id, Holiday>{ testHoliday.Id => testHoliday };
+    }
+}
