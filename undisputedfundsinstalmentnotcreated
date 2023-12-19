@@ -1,0 +1,1 @@
+Select id,Dispute_Reference__c ,status,Evidence_Gathering_Start_Date__c,FinalCaseBalance__c,Total_amount_in_dispute__c from case where recordtype.name='Dispute EW Insured' and Evidence_Gathering_Start_Date__c !=null and Undisputed_Funds_Received__c >0 and status !='Deposit closed - deposit repaid in full' and FinalCaseBalance__c>0 
